@@ -61,5 +61,7 @@ class AgentState(TypedDict, total=False):
 
     capped_by_ae: dict[str, list[Signal]]
     capped_by_csm: dict[str, list[Signal]]
+    extras_by_ae: dict[str, list[Signal]]    # ranks 6..10 per AE
+    extras_by_csm: dict[str, list[Signal]]   # ranks 6..10 per CSM
 
     metrics: RunMetrics

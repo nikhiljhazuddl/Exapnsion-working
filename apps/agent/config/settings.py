@@ -9,9 +9,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # load .env if present (apps/agent/.env or repo-root .env)
+# override=True is important: shell env may have empty exports (e.g.
+# ANTHROPIC_API_KEY="") that would otherwise shadow the values from .env.
 _HERE = Path(__file__).resolve().parent.parent  # apps/agent
-load_dotenv(_HERE / ".env")
-load_dotenv(_HERE.parent.parent / ".env")
+load_dotenv(_HERE / ".env", override=True)
+load_dotenv(_HERE.parent.parent / ".env", override=True)
 
 
 @dataclass(frozen=True)

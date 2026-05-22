@@ -154,12 +154,17 @@ async def score_one_node(payload: dict) -> dict:
 
 
 def cap_node(state: AgentState) -> dict:
-    """Apply per-AE and per-CSM caps; drop low-band signals from delivery."""
+    """Apply per-AE and per-CSM caps; drop low-band signals from delivery.
+
+    Returns:
+      - capped_by_ae / capped_by_csm: top-5 per role (the primary queue)
+      - extras_by_ae / extras_by_csm: ranks 6-10 per role (the "show 5 more" reveal)
+    """
     cfg = state["config"]
     cap = cfg.per_role_cap
+    extras_cap = cap * 2  # ranks 6..10
     signals = state.get("signals") or []
 
-    # Only keep is_signal=True, non-low.
     deliverable = [
         s for s in signals if s.is_signal and (s.priority_band or "low") != "low"
     ]
@@ -167,16 +172,37 @@ def cap_node(state: AgentState) -> dict:
 
     by_ae: dict[str, list[Signal]] = {}
     by_csm: dict[str, list[Signal]] = {}
+    extras_ae: dict[str, list[Signal]] = {}
+    extras_csm: dict[str, list[Signal]] = {}
+
+    ae_seen: dict[str, int] = {}
+    csm_seen: dict[str, int] = {}
 
     for s in deliverable:
         ae = (s.ownership.ae.name if s.ownership and s.ownership.ae else None) or "_unassigned_"
         csm = (s.ownership.csm.name if s.ownership and s.ownership.csm else None) or "_unassigned_"
-        if len(by_ae.setdefault(ae, [])) < cap:
-            by_ae[ae].append(s)
-        if csm != "_unassigned_" and len(by_csm.setdefault(csm, [])) < cap:
-            by_csm[csm].append(s)
 
-    return {"capped_by_ae": by_ae, "capped_by_csm": by_csm}
+        ae_idx = ae_seen.get(ae, 0)
+        if ae_idx < cap:
+            by_ae.setdefault(ae, []).append(s)
+        elif ae_idx < extras_cap:
+            extras_ae.setdefault(ae, []).append(s)
+        ae_seen[ae] = ae_idx + 1
+
+        if csm != "_unassigned_":
+            csm_idx = csm_seen.get(csm, 0)
+            if csm_idx < cap:
+                by_csm.setdefault(csm, []).append(s)
+            elif csm_idx < extras_cap:
+                extras_csm.setdefault(csm, []).append(s)
+            csm_seen[csm] = csm_idx + 1
+
+    return {
+        "capped_by_ae": by_ae,
+        "capped_by_csm": by_csm,
+        "extras_by_ae": extras_ae,
+        "extras_by_csm": extras_csm,
+    }
 
 
 # ---- node: persist --------------------------------------------------------

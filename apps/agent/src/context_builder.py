@@ -4,6 +4,11 @@ Cap to ~6,000 input tokens. Pruning order if oversize:
     1) drop conversation transcripts (keep summaries only)
     2) trim contact lists (keep top by persona_fit_score / first 8)
     3) drop signal arrays (gong_key_points, fireflies_action_items, topics)
+
+V1.5-style enrichment: if an AccountAgent is supplied, append its historical
+trend + feedback memory as data_quality_flags so the reasoning agent can
+account for "the AE marked the last 3 signals not relevant" or "this account's
+adoption health has been Yellow for 4 consecutive runs".
 """
 
 from __future__ import annotations

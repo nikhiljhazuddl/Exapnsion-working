@@ -58,7 +58,11 @@ _VALID_PAYLOAD = {
         },
         "secondary": None,
     },
-    "supporting_context": ["Gong: budget conversation", "3P: hiring", "Renewal proximity"],
+    "supporting_context": [
+        {"text": "Budget conversation in Gong call", "source": "Gong call summary"},
+        {"text": "Field Marketing role posted", "source": "Expansion Data col AC"},
+        {"text": "Renewal in 90 days", "source": "Account-Data col IU"},
+    ],
     "draft_outreach": {"subject": "Field events at TestCo", "body": "Hi Sample, ..."},
     "reasoning_trace": "Confirmed gap; matched persona; high confidence.",
 }

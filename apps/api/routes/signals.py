@@ -27,19 +27,29 @@ def _load_queue(role: str, user: str) -> list[dict]:
     return json.loads(p.read_text()).get("signals", [])
 
 
+def _load_queue_full(role: str, user: str) -> dict:
+    """Returns both `signals` (top 5) and `extras` (ranks 6-10)."""
+    role_dir = "by_ae" if role.upper() == "AE" else "by_csm"
+    p = output_dir() / "queues" / role_dir / f"{slugify(user)}.json"
+    if not p.exists():
+        return {"signals": [], "extras": []}
+    payload = json.loads(p.read_text())
+    return {"signals": payload.get("signals", []), "extras": payload.get("extras", [])}
+
+
 @router.get("/signals")
 def list_signals(role: Optional[str] = Query(None), user: Optional[str] = Query(None)) -> dict:
     if not role:
         # RevOps / Admin default — return all kept signals
-        return {"signals": _load_all_signals()}
+        return {"signals": _load_all_signals(), "extras": []}
     role_upper = role.upper()
     if role_upper in {"REVOPS", "ADMIN"}:
-        return {"signals": _load_all_signals()}
+        return {"signals": _load_all_signals(), "extras": []}
     if not user:
         raise HTTPException(400, "role=AE|CSM requires user param")
     if role_upper not in {"AE", "CSM"}:
         raise HTTPException(400, "role must be AE | CSM | RevOps | Admin")
-    return {"signals": _load_queue(role_upper, user)}
+    return _load_queue_full(role_upper, user)
 
 
 @router.get("/signals/{signal_id}")

@@ -30,3 +30,33 @@ class Notification(BaseModel):
     disqualifier_rule: DisqualifierRule
     explanation: str
     want_more_info: bool = True
+
+    # Investigate-panel payload (populated by persist_node from the AccountNode)
+    investigate: Optional["InvestigateDetail"] = None
+
+
+class InvestigateDetail(BaseModel):
+    """Rich explanation panel shown when an AE/CSM clicks 'Investigate' on a notification."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Why disqualified — natural language summary
+    why_disqualified: str
+    what_would_qualify: str  # what would need to change for this account to re-qualify
+
+    # Factor breakdown (every input that mattered)
+    factor_breakdown: list[dict] = []  # [{factor, value, impact: positive|negative|neutral}]
+
+    # Signals that reduced ranking
+    risk_indicators: list[str] = []  # human-readable bullets
+    data_quality_notes: list[str] = []
+
+    # Adoption health snapshot
+    adoption_health: Optional[str] = None
+    last_activity_days_ago: Optional[int] = None
+    renewal_proximity_days: Optional[int] = None
+    has_open_expansion_opp: bool = False
+    is_active_customer: bool = True
+
+
+Notification.model_rebuild()

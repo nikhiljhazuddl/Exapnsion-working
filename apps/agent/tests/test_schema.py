@@ -118,7 +118,10 @@ def test_signal_round_trip_positive():
                 why_this_person="Newly hired role, exact match for the gap.",
             )
         ),
-        supporting_context=["Gong call mentions 'spa partner events'", "Hiring signal: Field Marketing Manager opened 12 days ago"],
+        supporting_context=[
+            {"text": "Gong call mentions 'spa partner events'", "source": "Gong call summary"},
+            {"text": "Field Marketing Manager hire posted 12 days ago", "source": "Expansion Data col AC (Field Events Hiring)"},
+        ],
         draft_outreach=DraftOutreach(subject="Field events motion for Zenoti", body="Hi Priya, ..."),
         reasoning_trace="Gap confirmed → persona matched → high confidence.",
         priority_score=0.71,

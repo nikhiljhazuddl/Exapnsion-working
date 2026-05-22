@@ -18,6 +18,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </Link>
           <nav className="flex gap-4 text-sm text-gray-400">
             <Link href="/dashboard">Dashboard</Link>
+            {(session.role === "RevOps" || session.role === "Admin") && (
+              <Link href="/executive">Executive</Link>
+            )}
             <Link href="/notifications">Notifications</Link>
             {(session.role === "RevOps" || session.role === "Admin") && (
               <Link href="/runs">Runs</Link>
@@ -38,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             )}
           </div>
         </header>
-        <main className="px-6 py-8 max-w-6xl mx-auto">{children}</main>
+        <main className="px-6 py-8 max-w-[1400px] mx-auto">{children}</main>
       </body>
     </html>
   );

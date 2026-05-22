@@ -75,6 +75,8 @@ def persist_run(state: AgentState) -> dict:
     signals: list[Signal] = state.get("signals") or []
     capped_by_ae: dict[str, list[Signal]] = state.get("capped_by_ae") or {}
     capped_by_csm: dict[str, list[Signal]] = state.get("capped_by_csm") or {}
+    extras_by_ae: dict[str, list[Signal]] = state.get("extras_by_ae") or {}
+    extras_by_csm: dict[str, list[Signal]] = state.get("extras_by_csm") or {}
     contexts = state.get("contexts") or {}
     triggered_at = state.get("triggered_at") or datetime.utcnow()
 
@@ -169,18 +171,22 @@ def persist_run(state: AgentState) -> dict:
         p.unlink()
 
     for ae_name, sigs in capped_by_ae.items():
+        extras = extras_by_ae.get(ae_name, [])
         _write_json(queues_ae / f"{slugify(ae_name)}.json", {
             "user": ae_name,
             "role": "AE",
             "run_id": run_id,
             "signals": [_signal_to_payload(s, run_id) for s in sigs],
+            "extras": [_signal_to_payload(s, run_id) for s in extras],  # ranks 6..10
         })
     for csm_name, sigs in capped_by_csm.items():
+        extras = extras_by_csm.get(csm_name, [])
         _write_json(queues_csm / f"{slugify(csm_name)}.json", {
             "user": csm_name,
             "role": "CSM",
             "run_id": run_id,
             "signals": [_signal_to_payload(s, run_id) for s in sigs],
+            "extras": [_signal_to_payload(s, run_id) for s in extras],
         })
 
     # output/notifications/by_ae/<slug>.json + by_csm/<slug>.json

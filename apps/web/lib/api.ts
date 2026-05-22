@@ -56,9 +56,40 @@ export type Signal = {
     };
     secondary?: any;
   };
-  supporting_context?: string[];
+  supporting_context?: ExplanationBullet[] | string[]; // tolerate legacy strings
   draft_outreach?: { subject: string; body: string };
   reasoning_trace?: string;
+  business_logic?: string;
+  ontology_grounding?: {
+    expansion_entity_id?: string;
+    primary_pain_ids?: string[];
+    trigger_ids?: string[];
+    persona_entity_id?: string;
+    competitor_referenced?: string;
+    maturity_stage?: number;
+    churn_indicators_present?: string[];
+    causal_chain?: string;
+  };
+  explanation_why_prioritized?: ExplanationBullet[] | string;  // tolerate legacy prose
+  explanation_pain_points?: ExplanationBullet[] | string;
+  explanation_maturity?: ExplanationBullet[] | string;
+  explanation_triggers?: ExplanationBullet[] | string;
+  explanation_expansion_thesis?: ExplanationBullet[] | string;
+};
+
+export type ExplanationBullet = { text: string; source: string };
+
+export type InvestigateDetail = {
+  why_disqualified: string;
+  what_would_qualify: string;
+  factor_breakdown: { factor: string; value: string; impact: "positive" | "negative" | "neutral" }[];
+  risk_indicators: string[];
+  data_quality_notes: string[];
+  adoption_health?: string;
+  last_activity_days_ago?: number;
+  renewal_proximity_days?: number;
+  has_open_expansion_opp: boolean;
+  is_active_customer: boolean;
 };
 export type NotificationDTO = {
   account_id: string;
@@ -68,6 +99,7 @@ export type NotificationDTO = {
   detected_gap: string;
   disqualifier_rule: string;
   explanation: string;
+  investigate?: InvestigateDetail;
 };
 
 export const api = {
@@ -80,7 +112,7 @@ export const api = {
     if (role) qs.set("role", role);
     if (user) qs.set("user", user);
     const q = qs.toString();
-    return get<{ signals: Signal[] }>(`/api/signals${q ? `?${q}` : ""}`);
+    return get<{ signals: Signal[]; extras?: Signal[] }>(`/api/signals${q ? `?${q}` : ""}`);
   },
   signal: (id: string) => get<Signal>(`/api/signals/${encodeURIComponent(id)}`),
   notifications: (role?: string, user?: string) => {

@@ -15,7 +15,7 @@ from typing import Iterable, Optional
 
 from config.open_expansion_opps import is_open_opp_account
 from schemas.account_node import AccountNode
-from schemas.notification import DisqualifierRule, Notification
+from schemas.notification import DisqualifierRule, InvestigateDetail, Notification
 
 # --- Step 1: trigger -------------------------------------------------------
 
@@ -117,7 +117,146 @@ def evaluate_disqualifiers(node: AccountNode, today: date) -> Optional[DQHit]:
     return None
 
 
-def make_notification(node: AccountNode, hit: DQHit) -> Notification:
+def _investigate_detail(node: AccountNode, hit: DQHit, today: date) -> InvestigateDetail:
+    """Build the rich Investigate panel payload for a disqualified account."""
+    last_activity_days = (
+        (today - node.last_activity_date).days if node.last_activity_date else None
+    )
+    renewal_days = (
+        (node.plan_end_date - today).days if node.plan_end_date else None
+    )
+
+    # Factor breakdown — every input that mattered, with positive/negative tag
+    factors: list[dict] = [
+        {
+            "factor": "Use case gap detected",
+            "value": node.use_case_gap_field or "—",
+            "impact": "positive" if node.use_case_gap_field else "neutral",
+        },
+        {
+            "factor": "Adoption health",
+            "value": node.adoption_health or "Unknown",
+            "impact": (
+                "negative"
+                if (node.adoption_health or "").casefold() == "red"
+                else "positive"
+                if (node.adoption_health or "").casefold() == "green"
+                else "neutral"
+            ),
+        },
+        {
+            "factor": "Last activity",
+            "value": (
+                f"{last_activity_days} days ago"
+                if last_activity_days is not None
+                else "No activity logged"
+            ),
+            "impact": (
+                "negative"
+                if last_activity_days is not None and last_activity_days < 30
+                else "positive"
+                if last_activity_days is not None and last_activity_days <= 90
+                else "neutral"
+            ),
+        },
+        {
+            "factor": "Renewal proximity",
+            "value": (
+                f"{renewal_days} days to renewal"
+                if renewal_days is not None
+                else "Renewal date unknown"
+            ),
+            "impact": (
+                "positive"
+                if renewal_days is not None and 0 <= renewal_days <= 180
+                else "neutral"
+            ),
+        },
+        {
+            "factor": "Open expansion opp flag",
+            "value": "Yes — AE is already working it" if node.has_open_expansion_opp else "No",
+            "impact": "negative" if node.has_open_expansion_opp else "positive",
+        },
+        {
+            "factor": "Customer status",
+            "value": "Active" if node.is_active_customer else "Inactive",
+            "impact": "positive" if node.is_active_customer else "negative",
+        },
+    ]
+
+    # Risk indicators based on the rule hit + the node state
+    risks: list[str] = []
+    if hit.rule == "DQ1_red_adoption":
+        risks.append("Product adoption is Red — fix adoption before introducing expansion ask.")
+        risks.append("Customer is likely not deriving full value yet; new use case will struggle.")
+    elif hit.rule == "DQ2_recent_activity":
+        risks.append(
+            f"Last activity was {last_activity_days} days ago — customer was recently touched, "
+            "another outreach now risks looking pushy."
+        )
+        risks.append("Same use case was likely pitched in the last 30 days.")
+    elif hit.rule == "DQ3_named_open_opp":
+        risks.append("Account is on the named open-expansion-opp list — AE is already in motion.")
+        risks.append("Dual outreach would cause internal confusion.")
+    elif hit.rule == "DQ4_open_opp_flag":
+        risks.append("Salesforce has an open expansion opportunity flagged on this account.")
+        risks.append("Wait for the current opp to resolve before introducing a parallel pitch.")
+    elif hit.rule == "DQ5_inactive":
+        risks.append("Account is marked inactive or has been dormant for >90 days.")
+        risks.append("Expansion isn't the play — adoption recovery or churn-risk is.")
+
+    # What would qualify
+    qualify_map = {
+        "DQ1_red_adoption": "Adoption health moves from Red to Yellow or Green (typically after a successful re-engagement plan).",
+        "DQ2_recent_activity": "30 days pass with no further pitch on the same use case.",
+        "DQ3_named_open_opp": "The named open opportunity closes (won or lost), opening room for a new pitch.",
+        "DQ4_open_opp_flag": "The open expansion opp in Salesforce is closed — then this account re-qualifies.",
+        "DQ5_inactive": "Customer becomes active again (logs a session, runs an event, replies to outreach).",
+    }
+
+    why_disqualified_map = {
+        "DQ1_red_adoption": (
+            f"{node.account_name} shows a Red adoption health signal. The data tells us they're not "
+            "getting full value from what they already bought — pitching an expansion use case now "
+            "would land badly. The right play this week is adoption recovery, not expansion."
+        ),
+        "DQ2_recent_activity": (
+            f"We touched {node.account_name} just {last_activity_days} days ago. Reaching out again "
+            "on a new use case so soon would feel like a dogpile. The dataset prefers a 30-day "
+            "cooling window between pitches."
+        ),
+        "DQ3_named_open_opp": (
+            f"{node.account_name} is on the team's named open-expansion-opp list. The AE has "
+            "already opened a conversation; surfacing a parallel signal would create internal "
+            "confusion. Once that opp closes, this account re-enters consideration."
+        ),
+        "DQ4_open_opp_flag": (
+            "Salesforce has an open expansion opportunity flagged on this account. The AE is "
+            "already working it — a second signal would duplicate effort and risk confusing the "
+            "customer."
+        ),
+        "DQ5_inactive": (
+            "This account is marked inactive (or has been dormant for over 90 days). Expansion "
+            "isn't the right motion here — the team needs to first reignite usage or determine "
+            "whether to wind the customer down."
+        ),
+    }
+
+    return InvestigateDetail(
+        why_disqualified=why_disqualified_map.get(hit.rule, hit.explanation),
+        what_would_qualify=qualify_map.get(hit.rule, "Conditions for re-qualification not defined."),
+        factor_breakdown=factors,
+        risk_indicators=risks,
+        data_quality_notes=list(node.data_quality_flags),
+        adoption_health=node.adoption_health,
+        last_activity_days_ago=last_activity_days,
+        renewal_proximity_days=renewal_days,
+        has_open_expansion_opp=node.has_open_expansion_opp,
+        is_active_customer=node.is_active_customer,
+    )
+
+
+def make_notification(node: AccountNode, hit: DQHit, today: date) -> Notification:
     return Notification(
         account_id=node.account_id_15,
         account_name=node.account_name,
@@ -127,6 +266,7 @@ def make_notification(node: AccountNode, hit: DQHit) -> Notification:
         disqualifier_rule=hit.rule,
         explanation=hit.explanation,
         want_more_info=True,
+        investigate=_investigate_detail(node, hit, today),
     )
 
 
@@ -177,7 +317,7 @@ def run_filter(nodes: Iterable[AccountNode], today: date) -> FilterResult:
             survivors.append(node)
         else:
             dq_counts[hit.rule] = dq_counts.get(hit.rule, 0) + 1
-            notifications.append(make_notification(node, hit))
+            notifications.append(make_notification(node, hit, today))
 
     return FilterResult(
         triggered=triggered,
